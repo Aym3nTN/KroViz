@@ -1,0 +1,92 @@
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: web-application
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: WebApp
+    spec:
+      name: string | required=true
+      image: string | default="nginx:latest"
+      replicas: integer | default=3
+      port: integer | default=80
+      ingress:
+        enabled: boolean | default=false
+        host: string | default="app.example.com"
+    status:
+      availableReplicas: ${deployment.status.availableReplicas}
+      serviceEndpoint: ${service.metadata.name}
+
+  resources:
+    - id: configMap
+      template:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: ${schema.spec.name}-config
+        data:
+          APP_NAME: ${schema.spec.name}
+          APP_PORT: "${schema.spec.port}"
+
+    - id: deployment
+      readyWhen:
+        - ${self.status.availableReplicas == self.spec.replicas}
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.spec.name}
+        spec:
+          replicas: ${schema.spec.replicas}
+          selector:
+            matchLabels:
+              app: ${schema.spec.name}
+          template:
+            metadata:
+              labels:
+                app: ${schema.spec.name}
+            spec:
+              containers:
+                - name: app
+                  image: ${schema.spec.image}
+                  ports:
+                    - containerPort: ${schema.spec.port}
+                  envFrom:
+                    - configMapRef:
+                        name: ${configMap.metadata.name}
+
+    - id: service
+      template:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: ${schema.spec.name}-service
+        spec:
+          selector:
+            app: ${schema.spec.name}
+          ports:
+            - protocol: TCP
+              port: 80
+              targetPort: ${schema.spec.port}
+
+    - id: ingress
+      includeWhen:
+        - ${schema.spec.ingress.enabled}
+      template:
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+          name: ${schema.spec.name}-ingress
+        spec:
+          rules:
+            - host: ${schema.spec.ingress.host}
+              http:
+                paths:
+                  - path: /
+                    pathType: Prefix
+                    backend:
+                      service:
+                        name: ${service.metadata.name}
+                        port:
+                          number: 80

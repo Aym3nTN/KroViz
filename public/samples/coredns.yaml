@@ -1,0 +1,93 @@
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: coredns-deployment
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: CoreDNSDeployment
+    spec:
+      name: string | default="mycoredns"
+      replicas: integer | default=2
+      forwardDns: string | default="8.8.8.8"
+    status:
+      ready: ${deployment.status.availableReplicas}
+
+  resources:
+    - id: configMap
+      template:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: ${schema.spec.name}-config
+        data:
+          Corefile: |
+            .:53 {
+                errors
+                health {
+                    lameduck 5s
+                }
+                kubernetes cluster.local in-addr.arpa ip6.arpa {
+                    pods insecure
+                    fallthrough in-addr.arpa ip6.arpa
+                }
+                forward . ${schema.spec.forwardDns}
+                cache 30
+                loop
+                reload
+                loadbalance
+            }
+
+    - id: deployment
+      readyWhen:
+        - ${self.status.availableReplicas == self.spec.replicas}
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.spec.name}
+        spec:
+          replicas: ${schema.spec.replicas}
+          selector:
+            matchLabels:
+              app: ${schema.spec.name}
+          template:
+            metadata:
+              labels:
+                app: ${schema.spec.name}
+            spec:
+              containers:
+                - name: coredns
+                  image: coredns/coredns:1.11.3
+                  ports:
+                    - containerPort: 53
+                      protocol: UDP
+                    - containerPort: 53
+                      protocol: TCP
+                  volumeMounts:
+                    - name: config-volume
+                      mountPath: /etc/coredns
+                      readOnly: true
+              volumes:
+                - name: config-volume
+                  configMap:
+                    name: ${configMap.metadata.name}
+
+    - id: service
+      template:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: ${schema.spec.name}-service
+        spec:
+          selector:
+            app: ${schema.spec.name}
+          ports:
+            - name: dns-udp
+              port: 53
+              protocol: UDP
+              targetPort: 53
+            - name: dns-tcp
+              port: 53
+              protocol: TCP
+              targetPort: 53

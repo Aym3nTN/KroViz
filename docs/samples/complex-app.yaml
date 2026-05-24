@@ -1,0 +1,318 @@
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: microservices-platform
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: MicroservicesPlatform
+    spec:
+      name: string | required=true
+      environment: string | default="staging" | enum="dev,staging,prod"
+      domain: string | default="platform.example.com"
+      dbPassword: string | required=true
+      redisPassword: string | required=true
+      enableIngress: boolean | default=true
+      enableMonitoring: boolean | default=false
+      apiReplicas: integer | default=2
+      workerReplicas: integer | default=1
+    status:
+      apiReady: ${apiDeployment.status.availableReplicas}
+      workerReady: ${workerDeployment.status.availableReplicas}
+
+  resources:
+    # External reference to shared platform config
+    - id: platformConfig
+      externalRef:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: platform-defaults
+          namespace: platform-system
+
+    # Database credentials
+    - id: dbSecret
+      template:
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: ${schema.spec.name}-db-credentials
+        type: Opaque
+        data:
+          password: ${schema.spec.dbPassword}
+          username: "YWRtaW4="
+
+    # Cache credentials
+    - id: redisSecret
+      template:
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: ${schema.spec.name}-redis-credentials
+        type: Opaque
+        data:
+          password: ${schema.spec.redisPassword}
+
+    # Application config combining external and local config
+    - id: appConfig
+      template:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: ${schema.spec.name}-app-config
+        data:
+          ENVIRONMENT: ${schema.spec.environment}
+          LOG_LEVEL: ${schema.spec.environment == "prod" ? "warn" : "debug"}
+          DB_HOST: ${schema.spec.name}-postgres
+          REDIS_HOST: ${schema.spec.name}-redis
+          PLATFORM_REGION: ${platformConfig.data.?region.orValue("us-east-1")}
+          API_BASE_URL: "https://${schema.spec.domain}/api"
+
+    # PostgreSQL PVC
+    - id: dbPvc
+      template:
+        apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata:
+          name: ${schema.spec.name}-db-storage
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: ${schema.spec.environment == "prod" ? "100Gi" : "10Gi"}
+
+    # PostgreSQL Deployment
+    - id: dbDeployment
+      readyWhen:
+        - ${self.status.availableReplicas >= 1}
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.spec.name}-postgres
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: ${schema.spec.name}
+              component: database
+          template:
+            metadata:
+              labels:
+                app: ${schema.spec.name}
+                component: database
+            spec:
+              containers:
+                - name: postgres
+                  image: postgres:16
+                  ports:
+                    - containerPort: 5432
+                  env:
+                    - name: POSTGRES_PASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${dbSecret.metadata.name}
+                          key: password
+                    - name: POSTGRES_USER
+                      value: admin
+                    - name: POSTGRES_DB
+                      value: ${schema.spec.name}
+                  volumeMounts:
+                    - name: db-storage
+                      mountPath: /var/lib/postgresql/data
+              volumes:
+                - name: db-storage
+                  persistentVolumeClaim:
+                    claimName: ${dbPvc.metadata.name}
+
+    # PostgreSQL Service
+    - id: dbService
+      template:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: ${schema.spec.name}-postgres
+        spec:
+          selector:
+            app: ${schema.spec.name}
+            component: database
+          ports:
+            - port: 5432
+              targetPort: 5432
+
+    # Redis Deployment
+    - id: redisDeployment
+      readyWhen:
+        - ${self.status.availableReplicas >= 1}
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.spec.name}-redis
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: ${schema.spec.name}
+              component: cache
+          template:
+            metadata:
+              labels:
+                app: ${schema.spec.name}
+                component: cache
+            spec:
+              containers:
+                - name: redis
+                  image: redis:7-alpine
+                  ports:
+                    - containerPort: 6379
+                  args:
+                    - --requirepass
+                    - $(REDIS_PASSWORD)
+                  env:
+                    - name: REDIS_PASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${redisSecret.metadata.name}
+                          key: password
+
+    # Redis Service
+    - id: redisService
+      template:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: ${schema.spec.name}-redis
+        spec:
+          selector:
+            app: ${schema.spec.name}
+            component: cache
+          ports:
+            - port: 6379
+              targetPort: 6379
+
+    # API Server Deployment
+    - id: apiDeployment
+      readyWhen:
+        - ${self.status.availableReplicas >= 1}
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.spec.name}-api
+        spec:
+          replicas: ${schema.spec.apiReplicas}
+          selector:
+            matchLabels:
+              app: ${schema.spec.name}
+              component: api
+          template:
+            metadata:
+              labels:
+                app: ${schema.spec.name}
+                component: api
+            spec:
+              containers:
+                - name: api
+                  image: ${schema.spec.name}-api:latest
+                  ports:
+                    - containerPort: 3000
+                  envFrom:
+                    - configMapRef:
+                        name: ${appConfig.metadata.name}
+                  env:
+                    - name: DB_PASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${dbSecret.metadata.name}
+                          key: password
+                    - name: REDIS_PASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${redisSecret.metadata.name}
+                          key: password
+                    - name: DB_HOST
+                      value: ${dbService.metadata.name}
+                    - name: REDIS_HOST
+                      value: ${redisService.metadata.name}
+
+    # API Service
+    - id: apiService
+      template:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: ${schema.spec.name}-api
+        spec:
+          selector:
+            app: ${schema.spec.name}
+            component: api
+          ports:
+            - port: 80
+              targetPort: 3000
+
+    # Background Worker Deployment
+    - id: workerDeployment
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.spec.name}-worker
+        spec:
+          replicas: ${schema.spec.workerReplicas}
+          selector:
+            matchLabels:
+              app: ${schema.spec.name}
+              component: worker
+          template:
+            metadata:
+              labels:
+                app: ${schema.spec.name}
+                component: worker
+            spec:
+              containers:
+                - name: worker
+                  image: ${schema.spec.name}-worker:latest
+                  envFrom:
+                    - configMapRef:
+                        name: ${appConfig.metadata.name}
+                  env:
+                    - name: DB_PASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${dbSecret.metadata.name}
+                          key: password
+                    - name: REDIS_PASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${redisSecret.metadata.name}
+                          key: password
+                    - name: DB_HOST
+                      value: ${dbService.metadata.name}
+                    - name: REDIS_HOST
+                      value: ${redisService.metadata.name}
+
+    # Ingress
+    - id: apiIngress
+      includeWhen:
+        - ${schema.spec.enableIngress}
+      template:
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+          name: ${schema.spec.name}-ingress
+          annotations:
+            nginx.ingress.kubernetes.io/ssl-redirect: "true"
+        spec:
+          rules:
+            - host: ${schema.spec.domain}
+              http:
+                paths:
+                  - path: /api
+                    pathType: Prefix
+                    backend:
+                      service:
+                        name: ${apiService.metadata.name}
+                        port:
+                          number: 80

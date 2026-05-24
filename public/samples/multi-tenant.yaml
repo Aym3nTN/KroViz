@@ -1,0 +1,189 @@
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: multi-tenant-platform
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: TenantEnvironment
+    spec:
+      tenantName: string | required=true
+      tier: string | default="standard" | enum="standard,premium,enterprise"
+      cpuLimit: string | default="4"
+      memoryLimit: string | default="8Gi"
+      storageLimit: string | default="50Gi"
+      appName: string | required=true
+      appImage: string | required=true
+      replicas: integer | default=2
+      enableMonitoring: boolean | default=false
+    status:
+      namespaceReady: ${tenantNamespace.metadata.name}
+      appReady: ${appDeployment.status.availableReplicas}
+
+  resources:
+    - id: tenantNamespace
+      template:
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+          name: tenant-${schema.spec.tenantName}
+          labels:
+            tenant: ${schema.spec.tenantName}
+            tier: ${schema.spec.tier}
+            managed-by: kro
+
+    - id: resourceQuota
+      template:
+        apiVersion: v1
+        kind: ResourceQuota
+        metadata:
+          name: tenant-quota
+          namespace: ${tenantNamespace.metadata.name}
+        spec:
+          hard:
+            requests.cpu: ${schema.spec.cpuLimit}
+            requests.memory: ${schema.spec.memoryLimit}
+            requests.storage: ${schema.spec.storageLimit}
+            pods: "20"
+            services: "10"
+
+    - id: networkPolicy
+      template:
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        metadata:
+          name: tenant-isolation
+          namespace: ${tenantNamespace.metadata.name}
+        spec:
+          podSelector: {}
+          policyTypes:
+            - Ingress
+            - Egress
+          ingress:
+            - from:
+                - namespaceSelector:
+                    matchLabels:
+                      tenant: ${schema.spec.tenantName}
+          egress:
+            - to:
+                - namespaceSelector:
+                    matchLabels:
+                      tenant: ${schema.spec.tenantName}
+            - to:
+                - namespaceSelector:
+                    matchLabels:
+                      kubernetes.io/metadata.name: kube-system
+              ports:
+                - protocol: UDP
+                  port: 53
+
+    - id: serviceAccount
+      template:
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: ${schema.spec.tenantName}-sa
+          namespace: ${tenantNamespace.metadata.name}
+
+    - id: tenantRole
+      template:
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: Role
+        metadata:
+          name: tenant-role
+          namespace: ${tenantNamespace.metadata.name}
+        rules:
+          - apiGroups: ["", "apps", "networking.k8s.io"]
+            resources: ["pods", "services", "deployments", "ingresses"]
+            verbs: ["get", "list", "watch", "create", "update", "delete"]
+
+    - id: tenantRoleBinding
+      template:
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: RoleBinding
+        metadata:
+          name: tenant-role-binding
+          namespace: ${tenantNamespace.metadata.name}
+        subjects:
+          - kind: ServiceAccount
+            name: ${serviceAccount.metadata.name}
+            namespace: ${tenantNamespace.metadata.name}
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: Role
+          name: ${tenantRole.metadata.name}
+
+    - id: appDeployment
+      readyWhen:
+        - ${self.status.availableReplicas >= 1}
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.spec.appName}
+          namespace: ${tenantNamespace.metadata.name}
+          labels:
+            app: ${schema.spec.appName}
+            tenant: ${schema.spec.tenantName}
+        spec:
+          replicas: ${schema.spec.replicas}
+          selector:
+            matchLabels:
+              app: ${schema.spec.appName}
+          template:
+            metadata:
+              labels:
+                app: ${schema.spec.appName}
+                tenant: ${schema.spec.tenantName}
+            spec:
+              serviceAccountName: ${serviceAccount.metadata.name}
+              containers:
+                - name: app
+                  image: ${schema.spec.appImage}
+                  ports:
+                    - containerPort: 8080
+                  resources:
+                    requests:
+                      cpu: "250m"
+                      memory: "256Mi"
+                    limits:
+                      cpu: "500m"
+                      memory: "512Mi"
+
+    - id: appService
+      template:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: ${schema.spec.appName}-service
+          namespace: ${tenantNamespace.metadata.name}
+        spec:
+          selector:
+            app: ${schema.spec.appName}
+          ports:
+            - port: 80
+              targetPort: 8080
+
+    - id: appHpa
+      includeWhen:
+        - ${schema.spec.tier == "premium" || schema.spec.tier == "enterprise"}
+      template:
+        apiVersion: autoscaling/v2
+        kind: HorizontalPodAutoscaler
+        metadata:
+          name: ${schema.spec.appName}-hpa
+          namespace: ${tenantNamespace.metadata.name}
+        spec:
+          scaleTargetRef:
+            apiVersion: apps/v1
+            kind: Deployment
+            name: ${appDeployment.metadata.name}
+          minReplicas: ${schema.spec.replicas}
+          maxReplicas: ${schema.spec.replicas * 3}
+          metrics:
+            - type: Resource
+              resource:
+                name: cpu
+                target:
+                  type: Utilization
+                  averageUtilization: 70

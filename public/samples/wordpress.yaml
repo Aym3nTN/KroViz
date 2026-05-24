@@ -1,0 +1,192 @@
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: wordpress-stack
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: WordPressApp
+    spec:
+      name: string | required=true
+      mysqlPassword: string | required=true
+      storageClass: string | default="standard"
+      wordpressImage: string | default="wordpress:6.4"
+      mysqlImage: string | default="mysql:8.0"
+      replicas: integer | default=1
+      ingress:
+        enabled: boolean | default=false
+        host: string | default="wordpress.example.com"
+    status:
+      wordpressReady: ${wpDeployment.status.availableReplicas}
+      mysqlReady: ${mysqlDeployment.status.availableReplicas}
+      endpoint: ${wpService.metadata.name}
+
+  resources:
+    - id: mysqlSecret
+      template:
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: ${schema.spec.name}-mysql-pass
+        type: Opaque
+        data:
+          password: ${schema.spec.mysqlPassword}
+
+    - id: mysqlPvc
+      template:
+        apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata:
+          name: ${schema.spec.name}-mysql-pv-claim
+        spec:
+          storageClassName: ${schema.spec.storageClass}
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 5Gi
+
+    - id: mysqlDeployment
+      readyWhen:
+        - ${self.status.availableReplicas >= 1}
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.spec.name}-mysql
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: ${schema.spec.name}
+              tier: mysql
+          template:
+            metadata:
+              labels:
+                app: ${schema.spec.name}
+                tier: mysql
+            spec:
+              containers:
+                - name: mysql
+                  image: ${schema.spec.mysqlImage}
+                  ports:
+                    - containerPort: 3306
+                  env:
+                    - name: MYSQL_ROOT_PASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${mysqlSecret.metadata.name}
+                          key: password
+                  volumeMounts:
+                    - name: mysql-storage
+                      mountPath: /var/lib/mysql
+              volumes:
+                - name: mysql-storage
+                  persistentVolumeClaim:
+                    claimName: ${mysqlPvc.metadata.name}
+
+    - id: mysqlService
+      template:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: ${schema.spec.name}-mysql
+        spec:
+          selector:
+            app: ${schema.spec.name}
+            tier: mysql
+          ports:
+            - port: 3306
+              targetPort: 3306
+          clusterIP: None
+
+    - id: wpPvc
+      template:
+        apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata:
+          name: ${schema.spec.name}-wp-pv-claim
+        spec:
+          storageClassName: ${schema.spec.storageClass}
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 10Gi
+
+    - id: wpDeployment
+      readyWhen:
+        - ${self.status.availableReplicas >= 1}
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.spec.name}-wordpress
+        spec:
+          replicas: ${schema.spec.replicas}
+          selector:
+            matchLabels:
+              app: ${schema.spec.name}
+              tier: frontend
+          template:
+            metadata:
+              labels:
+                app: ${schema.spec.name}
+                tier: frontend
+            spec:
+              containers:
+                - name: wordpress
+                  image: ${schema.spec.wordpressImage}
+                  ports:
+                    - containerPort: 80
+                  env:
+                    - name: WORDPRESS_DB_HOST
+                      value: ${mysqlService.metadata.name}
+                    - name: WORDPRESS_DB_PASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${mysqlSecret.metadata.name}
+                          key: password
+                  volumeMounts:
+                    - name: wordpress-storage
+                      mountPath: /var/www/html
+              volumes:
+                - name: wordpress-storage
+                  persistentVolumeClaim:
+                    claimName: ${wpPvc.metadata.name}
+
+    - id: wpService
+      template:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: ${schema.spec.name}-wordpress
+        spec:
+          selector:
+            app: ${schema.spec.name}
+            tier: frontend
+          ports:
+            - port: 80
+              targetPort: 80
+          type: LoadBalancer
+
+    - id: wpIngress
+      includeWhen:
+        - ${schema.spec.ingress.enabled}
+      template:
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+          name: ${schema.spec.name}-ingress
+        spec:
+          rules:
+            - host: ${schema.spec.ingress.host}
+              http:
+                paths:
+                  - path: /
+                    pathType: Prefix
+                    backend:
+                      service:
+                        name: ${wpService.metadata.name}
+                        port:
+                          number: 80
