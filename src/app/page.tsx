@@ -1,77 +1,119 @@
-'use client';
+import Link from 'next/link';
+import Image from 'next/image';
+import { ArrowRight } from 'lucide-react';
+import logo from '../../public/logo.png';
+import hero from '../../public/hero.png';
 
-import React, { useEffect } from 'react';
-import { Header } from '@/components/layout/header';
-import { StatusBar } from '@/components/layout/status-bar';
-import { SplitPane } from '@/components/layout/split-pane';
-import { EditorPanel } from '@/components/editor/editor-panel';
-import { GraphPanel } from '@/components/graph/graph-panel';
-import { TimelineView } from '@/components/timeline/timeline-view';
-import { DiffPanel } from '@/components/panels/diff-panel';
-import { ResourceDetail } from '@/components/panels/resource-detail';
-import { ImpactPanel } from '@/components/panels/impact-panel';
-import { useRgdParser } from '@/hooks/use-rgd-parser';
-import { useEditorSync } from '@/hooks/use-editor-sync';
-import { useAppStore } from '@/store/app-store';
-import { SAMPLE_RGDS } from '@/lib/constants';
-
-export default function Home() {
-  const viewMode = useAppStore((s) => s.viewMode);
-  const setYamlContent = useAppStore((s) => s.setYamlContent);
-  const setActiveSample = useAppStore((s) => s.setActiveSample);
-
-  // Wire up parser and editor sync
-  useRgdParser();
-  useEditorSync();
-
-  // Load default sample on mount
-  useEffect(() => {
-    const defaultSample = SAMPLE_RGDS[2]; // WordPress - good complexity
-    fetch(defaultSample.file)
-      .then(res => res.text())
-      .then(text => {
-        setYamlContent(text);
-        setActiveSample(defaultSample.id);
-      })
-      .catch(() => {
-        // Fallback - load simple sample
-        fetch(SAMPLE_RGDS[0].file)
-          .then(res => res.text())
-          .then(text => {
-            setYamlContent(text);
-            setActiveSample(SAMPLE_RGDS[0].id);
-          })
-          .catch(console.error);
-      });
-  }, [setYamlContent, setActiveSample]);
-
-  const renderRightPanel = () => {
-    switch (viewMode) {
-      case 'timeline':
-        return <TimelineView />;
-      case 'diff':
-        return <DiffPanel />;
-      default:
-        return <GraphPanel />;
-    }
-  };
-
+export default function LandingPage() {
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      <Header />
-      <main className="flex-1 min-h-0 relative">
-        <SplitPane
-          left={<EditorPanel />}
-          right={
-            <div className="relative h-full">
-              {renderRightPanel()}
-              <ResourceDetail />
-              <ImpactPanel />
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-start p-6 pt-12 md:pt-20 text-slate-900 selection:bg-[#0f2b48]/20 overflow-y-auto overflow-x-hidden transition-colors">
+      
+      {/* Background ambient glow */}
+      <div className="fixed inset-0 pointer-events-none flex justify-center z-0">
+        <div className="absolute top-[-20%] w-[800px] h-[600px] bg-[#0f2b48]/5 blur-[150px] rounded-full mix-blend-multiply" />
+        <div className="absolute top-[20%] w-[600px] h-[600px] bg-[#c39a48]/10 blur-[150px] rounded-full mix-blend-multiply" />
+      </div>
+
+      <div className="max-w-6xl w-full mx-auto text-center space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-1000 ease-out relative z-10">
+        
+        {/* Header Section */}
+        <div className="space-y-6">
+          <div className="flex justify-center relative">
+            <div className="absolute inset-0 bg-[#c39a48]/20 blur-[80px] rounded-full" />
+            <Image
+              src={logo}
+              alt="KroViz Logo"
+              width={400}
+              height={180}
+              className="relative z-10 drop-shadow-l"
+              priority
+            />
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-lg md:text-2xl text-slate-600 max-w-2xl mx-auto font-light leading-relaxed">
+              The ultimate interactive visualizer and analytical engine for Kube Resource Orchestrator (KRO).
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+            <Link
+              href="/demo"
+              className="group flex items-center gap-2 bg-gradient-to-r from-[#0f2b48] to-[#1a416b] hover:from-[#13355a] hover:to-[#225283] text-white px-8 py-4 rounded-full font-medium transition-all hover:scale-105 active:scale-95 shadow-xl shadow-[#0f2b48]/20"
+            >
+              Launch Demo
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </Link>
+            <a
+              href="https://github.com/Aym3nTN/KroViz"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 bg-white hover:bg-slate-100 text-slate-800 px-8 py-4 rounded-full font-medium transition-all hover:scale-105 active:scale-95 border border-slate-200 shadow-md"
+            >
+              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor">
+                <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+              </svg>
+              GitHub
+            </a>
+          </div>
+        </div>
+
+        {/* Hero Screenshot Frame */}
+        <div className="relative mx-auto mt-12 w-full max-w-5xl rounded-2xl bg-white border border-slate-200 shadow-2xl overflow-hidden group">
+          {/* Mac-like Window Header */}
+          <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border-b border-slate-200 backdrop-blur">
+            <div className="w-3 h-3 rounded-full bg-red-400" />
+            <div className="w-3 h-3 rounded-full bg-amber-400" />
+            <div className="w-3 h-3 rounded-full bg-emerald-400" />
+            <div className="flex-1 text-center text-xs text-slate-400 font-mono tracking-wider opacity-80 group-hover:opacity-100 transition-opacity">KROViz — Application Visualization</div>
+          </div>
+          
+          {/* Image Container */}
+          <div className="relative aspect-[16/10] w-full bg-slate-100">
+            <Image
+              src={hero}
+              alt="KroViz Application Dashboard"
+              fill
+              className="object-cover object-top opacity-95 transition-all duration-700 group-hover:opacity-100 group-hover:scale-[1.02]"
+              priority
+            />
+            {/* Subtle inner shadow overlay */}
+            <div className="absolute inset-0 shadow-[inset_0_0_50px_rgba(0,0,0,0.05)] pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Feature Grid */}
+        <div className="grid md:grid-cols-3 gap-6 text-left max-w-5xl mx-auto pt-16 pb-20">
+          <div className="p-8 rounded-3xl bg-white border border-slate-200 hover:bg-slate-50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <div className="w-12 h-12 rounded-full bg-[#0f2b48]/10 flex items-center justify-center text-[#0f2b48] mb-6">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
             </div>
-          }
-        />
-      </main>
-      <StatusBar />
+            <div className="text-xl text-[#0f2b48] mb-3 font-semibold">Dependency Inference</div>
+            <div className="text-base text-slate-600 leading-relaxed">Automatically parses CEL expressions, config maps, and label selectors to build massive implicit dependency graphs from your RGDs.</div>
+          </div>
+          <div className="p-8 rounded-3xl bg-white border border-slate-200 hover:bg-slate-50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <div className="w-12 h-12 rounded-full bg-[#c39a48]/20 flex items-center justify-center text-[#c39a48] mb-6">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="text-xl text-[#0f2b48] mb-3 font-semibold">Execution Timelines</div>
+            <div className="text-base text-slate-600 leading-relaxed">Visualizes topological sort phases and calculates the critical path so you can identify bottlenecks in your resource orchestration.</div>
+          </div>
+          <div className="p-8 rounded-3xl bg-white border border-slate-200 hover:bg-slate-50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+            <div className="w-12 h-12 rounded-full bg-[#0f2b48]/10 flex items-center justify-center text-[#0f2b48] mb-6">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div className="text-xl text-[#0f2b48] mb-3 font-semibold">Impact Analysis</div>
+            <div className="text-base text-slate-600 leading-relaxed">Simulates failure scenarios instantly. Click any resource node to see the cascading blast radius blockages across all downstream dependents.</div>
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }

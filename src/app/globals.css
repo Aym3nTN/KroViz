@@ -1,18 +1,18 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-bg-primary: #0f0f17;
-  --color-bg-surface: #1a1a2e;
-  --color-bg-elevated: #242440;
+  --color-bg-primary: #0f111a;
+  --color-bg-surface: #151722;
+  --color-bg-elevated: #1e2230;
   --color-accent-violet: #7c3aed;
   --color-accent-cyan: #06b6d4;
   --color-accent-emerald: #10b981;
   --color-accent-amber: #f59e0b;
   --color-accent-orange: #f97316;
   --color-accent-red: #ef4444;
-  --font-family-sans: 'Inter', system-ui, sans-serif;
-  --font-family-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-family-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 }
 
 * {
@@ -24,7 +24,7 @@ html, body {
   padding: 0;
   height: 100%;
   font-family: var(--font-family-sans);
-  background-color: #0f0f17;
+  background-color: var(--color-bg-primary);
   color: #e2e8f0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -32,30 +32,30 @@ html, body {
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--color-bg-primary);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 3px;
+  background: #242938;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #333a4d;
 }
 
 /* Monaco editor decoration styles */
 .highlighted-yaml-line {
-  background-color: rgba(124, 58, 237, 0.12) !important;
+  background-color: rgba(6, 182, 212, 0.1) !important;
 }
 
 .highlighted-yaml-gutter {
-  background-color: #7c3aed !important;
+  background-color: #06b6d4 !important;
   width: 3px !important;
   margin-left: 3px;
 }
@@ -70,18 +70,26 @@ html, body {
 }
 
 .react-flow__minimap {
-  border-radius: 8px !important;
+  border-radius: 6px !important;
   overflow: hidden;
+  background-color: var(--color-bg-surface) !important;
 }
 
 .react-flow__controls {
-  border-radius: 8px !important;
+  border-radius: 6px !important;
   overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2) !important;
 }
 
 .react-flow__controls button {
-  width: 28px !important;
-  height: 28px !important;
+  width: 32px !important;
+  height: 32px !important;
+  background-color: var(--color-bg-surface) !important;
+  border-bottom: 1px solid var(--color-bg-elevated) !important;
+}
+
+.react-flow__controls button:hover {
+  background-color: var(--color-bg-elevated) !important;
 }
 
 .react-flow__controls button svg {
@@ -104,32 +112,32 @@ html, body {
   animation: slide-in 0.25s ease-out;
 }
 
-/* Glow pulse for critical path nodes */
-@keyframes glow-pulse {
+/* Flat pulse for critical path nodes - replacing glow */
+@keyframes border-pulse {
   0%, 100% {
-    box-shadow: 0 0 15px rgba(249, 115, 22, 0.2);
+    border-color: rgba(249, 115, 22, 1);
   }
   50% {
-    box-shadow: 0 0 25px rgba(249, 115, 22, 0.4);
+    border-color: rgba(249, 115, 22, 0.4);
   }
 }
 
 .glow-critical {
-  animation: glow-pulse 2s ease-in-out infinite;
+  animation: border-pulse 2s ease-in-out infinite;
 }
 
-/* Phase transition animation */
-@keyframes phase-glow {
+/* Phase transition animation - replacing glow */
+@keyframes phase-shift {
   0%, 100% {
-    box-shadow: 0 0 10px rgba(124, 58, 237, 0.1);
+    border-color: rgba(124, 58, 237, 1);
   }
   50% {
-    box-shadow: 0 0 20px rgba(124, 58, 237, 0.3);
+    border-color: rgba(124, 58, 237, 0.4);
   }
 }
 
 .animate-phase-glow {
-  animation: phase-glow 1.5s ease-in-out infinite;
+  animation: phase-shift 1.5s ease-in-out infinite;
 }
 
 /* Gradient text utility */

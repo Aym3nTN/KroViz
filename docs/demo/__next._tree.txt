@@ -1,0 +1,3 @@
+:HL["/KroViz/_next/static/chunks/02ao6rlzpg6un.css","style"]
+:HL["/KroViz/_next/static/chunks/0jvmviuftg5e2.css","style"]
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"demo","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"WuQSUIY9qmFX_TICyrBhw"}

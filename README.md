@@ -1,4 +1,12 @@
-# KROViz — KRO ResourceGraphDefinition Visualizer
+<div align="center">
+  <img src="public/logo.png" alt="KroViz Logo" width="120" />
+  <p><strong>KRO ResourceGraphDefinition Visualizer</strong></p>
+  
+  [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+  [![Framework](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org/)
+  [![Styling](https://img.shields.io/badge/TailwindCSS-v4-06B6D4?logo=tailwind-css)](https://tailwindcss.com/)
+  [![Graph](https://img.shields.io/badge/React_Flow-12-FF0072)](https://reactflow.dev/)
+</div>
 
 KROViz is a production-grade, highly interactive visualizer and analytical engine for Kube Resource Orchestrator (KRO) `ResourceGraphDefinitions` (RGDs). 
 
